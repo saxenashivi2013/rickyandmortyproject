@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rick & Morty — Characters</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- DataTables (Bootstrap 5 integration) -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/v/bs5/dt-1.13.6/r-2.5.0/datatables.min.css" />
+
+    <style>
+        /* small visual polish */
+        .avatar {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .table-container {
+            max-width: 1200px;
+            margin: 24px auto;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <div class="container table-container">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="mb-0">Rick & Morty — Human • Alive • Earth</h2>
+            <div>
+                <button id="refreshBtn" class="btn btn-outline-primary btn-sm">Refresh</button>
+                <a href="/" class="btn btn-link btn-sm">Home</a>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div id="statusMsg" class="mb-2 small text-muted">Loading characters...</div>
+
+                <div class="table-responsive">
+                    <table id="charactersTable" class="table table-striped table-hover" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Character</th>
+                                <th>Status</th>
+                                <th>Species</th>
+                                <th>Origin</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center mt-3 small text-muted">Data sourced from the local API endpoint
+            <code>/characters</code></footer>
+    </div>
+
+    <!-- JS libs -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/v/bs5/dt-1.13.6/r-2.5.0/datatables.min.js"></script>
+
+    <script>
+    const tableEl = $('#charactersTable');
+    let dt;
+
+    async function fetchAllCharacters() {
+      const status = $('#statusMsg');
+      status.text('Loading characters from API...');
+      try {
+        // Request a large per_page to retrieve all rows; tune per_page as necessary.
+        const res = await fetch('/characters?per_page=1000');
+        if (res.status === 429) throw new Error('Rate limited by API (429)');
+        if (!res.ok) throw new Error('Failed to load characters: ' + res.status);
+        const body = await res.json();
+        // body.items is what the /characters endpoint returns
+        return body.items || [];
+      } catch (err) {
+        status.addClass('text-danger').text('Error: ' + err.message);
+        console.error(err);
+        throw err;
+      }
+    }
+
+    function buildRow(item) {
+      const img = item.image ? `<img src="${item.image}" alt="${escapeHtml(item.name)}" class="avatar me-2">` : '';
+      const nameCell = `<div class="d-flex align-items-center"><div>${img}<div class="d-inline-block align-middle"><strong>${escapeHtml(item.name)}</strong><div class="small text-muted">#${item.id}</div></div></div></div>`;
+      return `<tr>
+        <td>${item.id}</td>
+        <td>${nameCell}</td>
+        <td>${escapeHtml(item.status||'')}</td>
+        <td>${escapeHtml(item.species||'')}</td>
+        <td>${escapeHtml(item.origin||'')}</td>
+        <td>${escapeHtml(item.location||'')}</td>
+      </tr>`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadTable() {
+      $('#statusMsg').removeClass('text-danger').text('Loading characters...');
+      try {
+        const items = await fetchAllCharacters();
+        const tbody = tableEl.find('tbody');
+        tbody.empty();
+        if (items.length === 0) {
+          $('#statusMsg').text('No characters found.');
+        } else {
+          for (const item of items) {
+            tbody.append(buildRow(item));
+          }
+          $('#statusMsg').text(`Showing ${items.length} characters.`);
+        }
+
+        // init or re-draw datatable
+        if ($.fn.DataTable.isDataTable('#charactersTable')) {
+          dt.clear().destroy();
+        }
+        dt = tableEl.DataTable({
+          responsive: true,
+          pageLength: 25,
+          order: [[0, 'asc']], // default order by ID
+          columnDefs: [
+            { targets: 0, width: '60px' },
+            { targets: 1, orderable: true },
+          ],
+        });
+      } catch (err) {
+        // fetchAllCharacters already updated status
+      }
+    }
+
+    $(document).ready(function () {
+      loadTable();
+      $('#refreshBtn').on('click', function () {
+        $(this).prop('disabled', true).text('Refreshing...');
+        loadTable().finally(() => {
+          $('#refreshBtn').prop('disabled', false).text('Refresh');
+        });
+      });
+    });
+    </script>
+</body>
+
+</html>
